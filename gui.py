@@ -1,13 +1,24 @@
 import wx
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
+import os
 
 
 class PrimaryGUI(wx.Frame):
 
     def __init__(self, parent, title):
-        super(PrimaryGUI, self).__init__(parent, title=title, size=(600, 400))
+        super(PrimaryGUI, self).__init__(parent, title=title, size=(650, 400))
 
-        # Initialize a dynamic TextCtrl field for use in buttons
+        # Initialize dynamic variables
+        self.config_file_location = ""
+        self.recipients_file_location = ""
+        self.sid_value = ""
+        self.auth_token_value = ""
+        self.phone_number_value = ""
+
+        # Initialize a dynamic TextCtrl field for the message and recipients file
         self.message_textctrl = wx.TextCtrl()
+        self.recipients_tc = wx.TextCtrl()
 
         # Initialize UI Functions
         self.init_ui()
@@ -16,7 +27,7 @@ class PrimaryGUI(wx.Frame):
         self.Centre()
 
         # Set the minimum screen size
-        self.SetMinSize(size=(600, 400))
+        self.SetMinSize(size=(610, 400))
 
         # Make the screen vizible to the user
         self.Show()
@@ -51,8 +62,7 @@ class PrimaryGUI(wx.Frame):
         message_hbox = wx.BoxSizer(wx.HORIZONTAL)
         self.message_textctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
         message_hbox.Add(self.message_textctrl, proportion=1, flag=wx.EXPAND)
-        vertical_sizer_box.Add(message_hbox, proportion=1, flag=wx.LEFT | wx.RIGHT | wx.EXPAND | wx.TOP,
-                               border=5)
+        vertical_sizer_box.Add(message_hbox, proportion=1, flag=wx.LEFT | wx.RIGHT | wx.EXPAND | wx.TOP, border=5)
 
         # Add gap between box and buttons
         vertical_sizer_box.Add((-1, 10))
@@ -62,8 +72,8 @@ class PrimaryGUI(wx.Frame):
         recipients_stext = wx.StaticText(panel, label='Recipients File:')
         recipients_stext.SetFont(font)
         buttons_hbox.Add(recipients_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
-        recipients_tc = wx.TextCtrl(panel, size=(150, 22))
-        buttons_hbox.Add(recipients_tc, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, border=5)
+        self.recipients_tc = wx.TextCtrl(panel, size=(250, 22))
+        buttons_hbox.Add(self.recipients_tc, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, border=5)
         select_file_button = wx.Button(panel, label='Select File', size=(70, 30))
         buttons_hbox.Add(select_file_button)
         buttons_hbox.Add((0, 10), 1, flag=wx.EXPAND)
@@ -78,7 +88,6 @@ class PrimaryGUI(wx.Frame):
 
         panel.SetSizer(vertical_sizer_box)
 
-
         # Add events to buttons
         self.Bind(wx.EVT_BUTTON, self.on_send_message, id=send_message_button.GetId())
         self.Bind(wx.EVT_BUTTON, self.on_select_file, id=select_file_button.GetId())
@@ -92,13 +101,34 @@ class PrimaryGUI(wx.Frame):
     def on_send_message(self, event):
         print(self.message_textctrl.GetValue())
 
-    # Here we will put the code for when you need to select the recipients file
+    # Using tKinter to allow the user to select a file location
     def on_select_file(self, event):
-        print("Select the file yo")
 
-    # Here we will put the code for when to show the tags
+        # Open up the GUI for selecting a file
+        Tk().withdraw()  # we don't want a full GUI, so keep the root window from appearing
+        filename = askopenfilename(title="Choose a File",
+                                   initialdir=os.path.dirname(os.path.realpath(__file__)),
+                                   filetypes=(("Excel File (*.xlsx)", "*.xlsx"),
+                                              ("Legacy Excel File (*.xls)", "*.xls"),
+                                              ),
+                                   )  # show an "Open" dialog box and return the path to the selected file
+
+        # If  a file was selected, store it and put it on the screen
+        if filename is not "":
+            self.recipients_file_location = filename
+            self.recipients_tc.SetValue(filename)
+
+    # Open a message dialog showing the current tag options
     def on_tags(self, event):
-        print("Open up the GUI for selecting the tags")
+        dial = wx.MessageDialog(None, 'Check Documentation for Information on Tags\n'
+                                      '#FirstName\n'
+                                      '#LastName\n'
+                                      '#Bond\n'
+                                      '#PhoneNumber'
+                                      , 'Tags', wx.OK | wx.ICON_QUESTION)# This isn't actually a question
+                                                                                       # But theres an annoying sound
+                                                                                       # otherwise
+        dial.ShowModal()
 
     # Here we will show the configuration menu
     def on_configuration(self, event):
