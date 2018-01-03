@@ -6,15 +6,15 @@ import os
 
 class PrimaryGUI(wx.Frame):
 
-    def __init__(self, parent, title, sid, authtoken, phonenumber, default_csv, config_file):
+    def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_file):
         super(PrimaryGUI, self).__init__(parent, title=title, size=(650, 400))
 
         # Initialize dynamic variables
-        self.config_file_location = ""
-        self.recipients_file_location = ""
-        self.sid_value = ""
-        self.auth_token_value = ""
-        self.phone_number_value = ""
+        self.config_file = config_file
+        self.recipients_file_location = default_recipient_file
+        self.sid_value = sid
+        self.auth_token_value = authtoken
+        self.phonenumber_value = phonenumber
 
         # Initialize a dynamic TextCtrl field for the message and recipients file
         self.message_textctrl = wx.TextCtrl()
