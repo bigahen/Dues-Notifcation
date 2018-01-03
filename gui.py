@@ -2,6 +2,7 @@ import wx
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import os
+import re
 
 
 class PrimaryGUI(wx.Frame):
@@ -97,9 +98,35 @@ class PrimaryGUI(wx.Frame):
         # This should be changed to work only on the configuration menu if more menus are added
         self.Bind(wx.EVT_MENU_OPEN, self.on_configuration)
 
+    def tag_matching(self, msg, recipient):
+        rep = {"#Bond": recipient.bond,
+               "#FirstName": recipient.first_name,
+               "#LastName": recipient.last_name,
+               "#PhoneNumber": recipient.phonenumber,
+               }
+        rep = dict((re.escape(k), v) for k, v in rep.items())
+        pattern = re.compile("|".join(rep.keys()))
+        return pattern.sub(lambda m: rep[re.escape(m.group(0))], msg)
+
+    def load_recipients(self):
+        wb = load_workbook(recipients_file_location)
+        sheet = wb.worksheets[0]
+        recipients_list = []
+        for i in range(2, sheet.max_row + 1):
+            recipients_list.append(Recipient(bond=sheet.cell(row=i, column=1).value,
+                                             first_name=sheet.cell(row=i, column=2).value,
+                                             last_name=sheet.cell(row=i, column=3).value,
+                                             phonenumber=sheet.cell(row=i, column=4).value,))
+        return recipients_list
+
     # Here we will put the code for when the message is going to be sent
     def on_send_message(self, event):
-        print(self.message_textctrl.GetValue())
+        recipients_list = load_recipients()
+        msg = self.message_textctrl.GetValue()
+        for recipient in recipients_list:
+            format_msg = tag_matching(msg, recipient)
+            twilioCli.messages.create(body=format_msg, from_=recipient.phonenumber, to=phonenumber_value)
+
 
     # Using tKinter to allow the user to select a file location
     def on_select_file(self, event):
@@ -134,3 +161,9 @@ class PrimaryGUI(wx.Frame):
     def on_configuration(self, event):
         print("Select your configuration")
 
+class Recipient():
+    def __init__(self, bond="", first_name="", last_name="", phonenumber=""):
+        self.bond = bond
+        self.first_name = first_name
+        self.last_name = last_name
+        self.phonenumber = phonenumber
