@@ -3,13 +3,17 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import os
 import json
+import re
+from twilio.rest import Client
+from openpyxl import load_workbook
 
 
 class ConfigGUI(wx.Dialog):
-    def __init__(self, parent, title, config_file):
+    def __init__(self, parent, title, config_data_json, config_file):
         super(ConfigGUI, self).__init__(parent, title=title, size=(400, 185))
 
         self.config_file = config_file
+        self.config_data_json = config_data_json
         self.sid_tc = wx.TextCtrl()
         self.authtoken_tc = wx.TextCtrl()
         self.phonenumber_tc = wx.TextCtrl()
@@ -81,17 +85,18 @@ class ConfigGUI(wx.Dialog):
         panel.SetSizer(vertical_sizer_box)
 
     def get_config_data(self):
-        config_data = json.loads(self.config_file.read())
-        self.sid_tc.SetValue(config_data.get("sid"))
-        self.authtoken_tc.SetValue(config_data.get("authtoken"))
-        self.phonenumber_tc.SetValue(config_data.get("phonenumber"))
+        self.sid_tc.SetValue(self.config_data_json.get("sid"))
+        self.authtoken_tc.SetValue(self.config_data_json.get("authtoken"))
+        self.phonenumber_tc.SetValue(self.config_data_json.get("phonenumber"))
 
 class PrimaryGUI(wx.Frame):
-    def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_file):
+    def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_data_json, config_file):
         super(PrimaryGUI, self).__init__(parent, title=title, size=(650, 400))
 
         # Initialize dynamic variables
+
         self.config_file = config_file
+        self.config_data_json = config_data_json
         self.recipients_file_location = default_recipient_file
         self.sid_value = sid
         self.auth_token_value = authtoken
@@ -178,9 +183,44 @@ class PrimaryGUI(wx.Frame):
         # This should be changed to work only on the configuration menu if more menus are added
         self.Bind(wx.EVT_MENU_OPEN, self.on_configuration)
 
+    def load_recipients(self):
+        wb = load_workbook(self.recipients_file_location)
+        sheet = wb.worksheets[0]
+        recipients_list = []
+        for i in range(2, sheet.max_row + 1):
+            recipients_list.append(Recipient(bond=sheet.cell(row=i, column=1).value,
+                                             first_name=sheet.cell(row=i, column=2).value,
+                                             last_name=sheet.cell(row=i, column=3).value,
+                                             phonenumber=self.format_phone_number(sheet.cell(row=i, column=4).value)))
+        return recipients_list
+
     # Here we will put the code for when the message is going to be sent
     def on_send_message(self, event):
-        print(self.message_textctrl.GetValue())
+        recipients_list = self.load_recipients()
+        msg = self.message_textctrl.GetValue()
+        twilioCli = Client(self.sid_value, self.auth_token_value)
+        for recipient in recipients_list:
+            format_msg = self.tag_matching(msg, recipient)
+            twilioCli.messages.create(body=format_msg, from_=self.phonenumber_value, to=recipient.phonenumber)
+
+        # Show message about success/failure
+
+    def tag_matching(self, msg, recipient):
+        rep = {"#Bond": recipient.bond,
+                "#FirstName": recipient.first_name,
+                "#LastName": recipient.last_name,
+                "#PhoneNumber": recipient.phonenumber,
+               }
+        rep = dict((re.escape(k), v) for k, v in rep.items())
+        pattern = re.compile("|".join(rep.keys()))
+        return pattern.sub(lambda m: rep[re.escape(m.group(0))], msg)
+
+    def format_phone_number(self, number):
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace("-", "")
+        number = "+1" + number
+        return number
 
     # Using tKinter to allow the user to select a file location
     def on_select_file(self, event):
@@ -213,7 +253,14 @@ class PrimaryGUI(wx.Frame):
 
     # Here we will show the configuration menu
     def on_configuration(self, event):
-        config_ui = ConfigGUI(self, "Configuration", self.config_file)
+        config_ui = ConfigGUI(self, "Configuration", self.config_data_json, self.config_file)
         config_ui.ShowModal()
         print("Select your configuration")
 
+
+class Recipient():
+    def __init__(self, bond="", first_name="", last_name="", phonenumber=""):
+        self.bond = bond
+        self.first_name = first_name
+        self.last_name = last_name
+        self.phonenumber = phonenumber
