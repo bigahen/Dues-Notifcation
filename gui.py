@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 
 class ConfigGUI(wx.Dialog):
     def __init__(self, parent, title, config_data_json, config_file):
-        super(ConfigGUI, self).__init__(parent, title=title, size=(400, 185))
+        super(ConfigGUI, self).__init__(None, title=title, size=(400, 185))
 
         self.config_file = config_file
         self.config_data_json = config_data_json
@@ -76,18 +76,38 @@ class ConfigGUI(wx.Dialog):
 
         buttons_hbox = wx.BoxSizer(wx.HORIZONTAL)
         buttons_hbox.Add((0, 10), 1, flag=wx.EXPAND)
-        tags_button = wx.Button(panel, label='OK', size=(50, 30))
-        buttons_hbox.Add(tags_button, flag=wx.RIGHT, border=5)
-        send_message_button = wx.Button(panel, label='Cancel', size=(50, 30))
-        buttons_hbox.Add(send_message_button, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_RIGHT, border=0)
+        ok_button = wx.Button(panel, label='OK', size=(50, 30))
+        buttons_hbox.Add(ok_button, flag=wx.RIGHT, border=5)
+        cancel_button = wx.Button(panel, label='Cancel', size=(50, 30))
+        buttons_hbox.Add(cancel_button, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_RIGHT, border=0)
         vertical_sizer_box.Add(buttons_hbox, flag=wx.RIGHT | wx.EXPAND, border=10)
 
         panel.SetSizer(vertical_sizer_box)
+
+        self.Bind(wx.EVT_BUTTON, self.on_ok, id=ok_button.GetId())
+        self.Bind(wx.EVT_BUTTON, self.on_cancel, id=cancel_button.GetId())
 
     def get_config_data(self):
         self.sid_tc.SetValue(self.config_data_json.get("sid"))
         self.authtoken_tc.SetValue(self.config_data_json.get("authtoken"))
         self.phonenumber_tc.SetValue(self.config_data_json.get("phonenumber"))
+
+    def on_ok(self, event):
+        sid = self.sid_tc.GetValue()
+        authtoken = self.authtoken_tc.GetValue()
+        phonenumber = self.phonenumber_tc.GetValue()
+
+        self.config_data_json['sid'] = sid
+        self.config_data_json['authtoken'] = authtoken
+        self.config_data_json['phonenumber'] = phonenumber
+        self.config_file.truncate(0)
+        self.config_file.seek(0, 0)
+        json.dump(self.config_data_json, self.config_file)
+        self.Close()
+
+    def on_cancel(self, event):
+        self.Close()
+
 
 class PrimaryGUI(wx.Frame):
     def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_data_json, config_file):
