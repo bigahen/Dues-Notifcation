@@ -2,10 +2,91 @@ import wx
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import os
+import json
 
+
+class ConfigGUI(wx.Dialog):
+    def __init__(self, parent, title, config_file):
+        super(ConfigGUI, self).__init__(parent, title=title, size=(400, 185))
+
+        self.config_file = config_file
+        self.sid_tc = wx.TextCtrl()
+        self.authtoken_tc = wx.TextCtrl()
+        self.phonenumber_tc = wx.TextCtrl()
+
+        self.init_ui()
+
+        self.get_config_data()
+
+        self.Center()
+
+        self.Show()
+
+    def init_ui(self):
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        font.SetPointSize(10)
+
+        panel = wx.Panel(self, style=wx.SIMPLE_BORDER)
+        panel.SetBackgroundColour(wx.Colour(red=245, blue=245, green=245))
+
+        # Main vertical sizer box
+        vertical_sizer_box = wx.BoxSizer(wx.VERTICAL)
+
+        sid_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        sid_stext = wx.StaticText(panel, label='Account SID:')
+        sid_stext.SetFont(font)
+        sid_hbox.Add(sid_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.TOP, border=5)
+        sid_hbox.Add((19, 0))
+        self.sid_tc = wx.TextCtrl(panel, size=(250, 22))
+        sid_hbox.Add(self.sid_tc, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.TOP | wx.LEFT,
+                     border=5)
+        vertical_sizer_box.Add(sid_hbox, flag=wx.RIGHT | wx.EXPAND, border=10)
+
+        # Add gap
+        vertical_sizer_box.Add((-1, 10))
+
+        authtoken_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        authtoken_stext = wx.StaticText(panel, label='Auth Token:')
+        authtoken_stext.SetFont(font)
+        authtoken_hbox.Add(authtoken_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
+        authtoken_hbox.Add((23, 0))
+        self.authtoken_tc = wx.TextCtrl(panel, size=(250, 22))
+        authtoken_hbox.Add(self.authtoken_tc, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.LEFT,
+                     border=5)
+        vertical_sizer_box.Add(authtoken_hbox, flag=wx.RIGHT | wx.EXPAND, border=10)
+
+        # Add gap
+        vertical_sizer_box.Add((-1, 10))
+
+        phonenumber_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        phonenumber_stext = wx.StaticText(panel, label='Phone Number:')
+        phonenumber_stext.SetFont(font)
+        phonenumber_hbox.Add(phonenumber_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
+        self.phonenumber_tc = wx.TextCtrl(panel, size=(250, 22))
+        phonenumber_hbox.Add(self.phonenumber_tc, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.LEFT,
+                     border=5)
+        vertical_sizer_box.Add(phonenumber_hbox, flag=wx.RIGHT | wx.EXPAND, border=10)
+
+        # Adding gap before buttons
+        vertical_sizer_box.Add((-1, 15))
+
+        buttons_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        buttons_hbox.Add((0, 10), 1, flag=wx.EXPAND)
+        tags_button = wx.Button(panel, label='OK', size=(50, 30))
+        buttons_hbox.Add(tags_button, flag=wx.RIGHT, border=5)
+        send_message_button = wx.Button(panel, label='Cancel', size=(50, 30))
+        buttons_hbox.Add(send_message_button, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_RIGHT, border=0)
+        vertical_sizer_box.Add(buttons_hbox, flag=wx.RIGHT | wx.EXPAND, border=10)
+
+        panel.SetSizer(vertical_sizer_box)
+
+    def get_config_data(self):
+        config_data = json.loads(self.config_file.read())
+        self.sid_tc.SetValue(config_data.get("sid"))
+        self.authtoken_tc.SetValue(config_data.get("authtoken"))
+        self.phonenumber_tc.SetValue(config_data.get("phonenumber"))
 
 class PrimaryGUI(wx.Frame):
-
     def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_file):
         super(PrimaryGUI, self).__init__(parent, title=title, size=(650, 400))
 
@@ -132,5 +213,7 @@ class PrimaryGUI(wx.Frame):
 
     # Here we will show the configuration menu
     def on_configuration(self, event):
+        config_ui = ConfigGUI(self, "Configuration", self.config_file)
+        config_ui.ShowModal()
         print("Select your configuration")
 
