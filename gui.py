@@ -19,6 +19,7 @@ class ConfigGUI(wx.Dialog):
         self.phonenumber_tc = wx.TextCtrl()
 
         self.init_ui()
+        self.Bind(wx.EVT_CLOSE, self.on_cancel)
 
         self.get_config_data()
 
@@ -102,11 +103,13 @@ class ConfigGUI(wx.Dialog):
         self.config_data_json['phonenumber'] = phonenumber
         self.config_file.truncate(0)
         self.config_file.seek(0, 0)
-        json.dump(self.config_data_json, self.config_file)
-        self.Close()
+        string = json.dumps(self.config_data_json)
+        self.config_file.write(string)
+        self.config_file.flush()
+        self.Destroy()
 
     def on_cancel(self, event):
-        self.Close()
+        self.Destroy()
 
 
 class PrimaryGUI(wx.Frame):
@@ -126,6 +129,8 @@ class PrimaryGUI(wx.Frame):
         self.message_textctrl = wx.TextCtrl()
         self.recipients_tc = wx.TextCtrl()
 
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+
         # Initialize UI Functions
         self.init_ui()
 
@@ -137,6 +142,10 @@ class PrimaryGUI(wx.Frame):
 
         # Make the screen visible to the user
         self.Show()
+
+    #still need to store the most recent receptiants file here
+    def on_close(self, event):
+        self.Destroy()
 
     # Initialize the UI
     def init_ui(self):
@@ -179,6 +188,7 @@ class PrimaryGUI(wx.Frame):
         recipients_stext.SetFont(font)
         buttons_hbox.Add(recipients_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
         self.recipients_tc = wx.TextCtrl(panel, size=(250, 22))
+        self.recipients_tc.SetValue(self.recipients_file_location)
         buttons_hbox.Add(self.recipients_tc, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, border=5)
         select_file_button = wx.Button(panel, label='Select File', size=(70, 30))
         buttons_hbox.Add(select_file_button)
@@ -203,33 +213,68 @@ class PrimaryGUI(wx.Frame):
         # This should be changed to work only on the configuration menu if more menus are added
         self.Bind(wx.EVT_MENU_OPEN, self.on_configuration)
 
+    # Load all of the recipients from the selected excel spreadsheet
     def load_recipients(self):
         wb = load_workbook(self.recipients_file_location)
         sheet = wb.worksheets[0]
         recipients_list = []
+
+        if( sheet.cell(row=1, column=1).value is None or "bond" not in sheet.cell(row=1, column=1).value.lower() or
+            sheet.cell(row=1, column=2).value is None or "first" not in sheet.cell(row=1, column=2).value.lower() or
+            sheet.cell(row=1, column=3).value is None or "last" not in sheet.cell(row=1, column=3).value.lower() or
+            sheet.cell(row=1, column=4).value is None or "phone" not in sheet.cell(row=1, column=4).value.lower()):
+            return None
+
+
         for i in range(2, sheet.max_row + 1):
             recipients_list.append(Recipient(bond=sheet.cell(row=i, column=1).value,
                                              first_name=sheet.cell(row=i, column=2).value,
                                              last_name=sheet.cell(row=i, column=3).value,
                                              phonenumber=self.format_phone_number(sheet.cell(row=i, column=4).value)))
+
+        # Return the list of recipient objects
         return recipients_list
 
     # Here we will put the code for when the message is going to be sent
     def on_send_message(self, event):
-        recipients_list = self.load_recipients()
+        response = wx.MessageBox('Are you sure you would like to send this message?', 'Send Message...', wx.YES_NO | wx.ICON_QUESTION)
+        if response is not 2:
+            return
         msg = self.message_textctrl.GetValue()
-        twilioCli = Client(self.sid_value, self.auth_token_value)
-        for recipient in recipients_list:
-            format_msg = self.tag_matching(msg, recipient)
-            twilioCli.messages.create(body=format_msg, from_=self.phonenumber_value, to=recipient.phonenumber)
+        if msg is "":
+            wx.MessageBox('Cannot send empty message!', 'Error', wx.OK | wx.ICON_ERROR)
+            return
 
-        # Show message about success/failure
+        if self.recipients_file_location is "":
+            wx.MessageBox('No file selected!', 'Error', wx.OK | wx.ICON_ERROR)
+            return
+
+        try:
+            recipients_list = self.load_recipients()
+            if recipients_list == None:
+                raise FileNotFoundError()
+        except FileNotFoundError:
+            wx.MessageBox('Error loading file!', 'Error', wx.OK | wx.ICON_ERROR)
+            return
+
+        # This error handling needs some work
+        try:
+            twilioCli = Client(self.sid_value, self.auth_token_value)
+            for recipient in recipients_list:
+                format_msg = self.tag_matching(msg, recipient)
+                twilioCli.messages.create(body=format_msg, from_=self.phonenumber_value, to=recipient.phonenumber)
+        # This is too broad, but I'm not sure how to handle twilio exceptions right now
+        except:
+            wx.MessageBox('Error: Check Twilio configuration!', 'Error', wx.OK | wx.ICON_ERROR)
+            return
+
+        wx.MessageBox('Your message was sent successfully!', 'Sent', wx.OK | wx.ICON_INFORMATION)
 
     def tag_matching(self, msg, recipient):
-        rep = {"#Bond": recipient.bond,
-                "#FirstName": recipient.first_name,
-                "#LastName": recipient.last_name,
-                "#PhoneNumber": recipient.phonenumber,
+        rep = {"#Bond": str(recipient.bond),
+                "#FirstName": str(recipient.first_name),
+                "#LastName": str(recipient.last_name),
+                "#PhoneNumber": str(recipient.phonenumber),
                }
         rep = dict((re.escape(k), v) for k, v in rep.items())
         pattern = re.compile("|".join(rep.keys()))
@@ -258,6 +303,12 @@ class PrimaryGUI(wx.Frame):
         if filename is not "":
             self.recipients_file_location = filename
             self.recipients_tc.SetValue(filename)
+            self.config_data_json['default_recipient_file'] = self.recipients_file_location
+            self.config_file.truncate(0)
+            self.config_file.seek(0, 0)
+            string = json.dumps(self.config_data_json)
+            self.config_file.write(string)
+            self.config_file.flush()
 
     # Open a message dialog showing the current tag options
     def on_tags(self, event):
@@ -275,7 +326,10 @@ class PrimaryGUI(wx.Frame):
     def on_configuration(self, event):
         config_ui = ConfigGUI(self, "Configuration", self.config_data_json, self.config_file)
         config_ui.ShowModal()
-        print("Select your configuration")
+        self.config_data_json = config_ui.config_data_json
+        self.sid_value = self.config_data_json.get('sid')
+        self.auth_token_value = self.config_data_json.get('authtoken')
+        self.phonenumber_value = self.config_data_json.get('phonenumber')
 
 
 class Recipient():

@@ -16,11 +16,16 @@ def main():
         config_file.close()
         config_file = open("config.json", 'r+')
 
+
     #Translate json file to dictionary and open gui app. Pass in config data
-    config_data_json = json.loads(config_file.read())
+    try:
+        config_data_json = json.loads(config_file.read())
+    except ValueError:
+        config_data_json = {'sid': "", 'authtoken': "", 'phonenumber': "", 'default_recipient_file': ""}
     app = gui.wx.App()
     gui.PrimaryGUI(None, title='KY Iota Notification System', sid=config_data_json.get("sid"), authtoken=config_data_json.get("authtoken"), phonenumber=config_data_json.get("phonenumber"), default_recipient_file=config_data_json.get("default_recipient_file"), config_data_json=config_data_json, config_file=config_file)
     app.MainLoop()
+    print("Program Ending")
     config_file.close()
 
 if __name__ == '__main__':
