@@ -8,24 +8,31 @@ import json
 import re
 from twilio.rest import Client
 from openpyxl import load_workbook
+from urllib.request import urlopen
+import urllib
 
 
 class SelectGUI(wx.Dialog):
     def __init__(self, parent, title, recipients_list, sid, authtoken, phonenumber):
 
+        # Get the size of the recipients_list so the UI can scale based on the size
         list_size = len(recipients_list)
         self.ui_size = (400, list_size*25 + 100)
+        # If the size exceeds 260, scale it back down
         if self.ui_size[1] > 260:
             self.ui_size = (400, 260)
 
         super(SelectGUI, self).__init__(parent, title=title, size=self.ui_size)
         self.Center()
 
+        # Local object variables
         self.recipients_list = recipients_list
         self.sid = sid
         self.authtoken = authtoken
         self.phonenumber = phonenumber
         self.receipients_checkbox = []
+
+        self.Bind(wx.EVT_CLOSE, self.on_cancel)
 
         self.init_ui()
 
@@ -34,7 +41,7 @@ class SelectGUI(wx.Dialog):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetPointSize(10)
 
-        #Scroll Panel Containing All possible recipients
+        # Scroll Panel Containing All possible recipients
         checkbox_panel = scrolled.ScrolledPanel(self, -1, size=(self.ui_size[0]-15, self.ui_size[1]-75), pos=(0, 0), style=wx.SIMPLE_BORDER)
         checkbox_panel.SetBackgroundColour(wx.Colour(red=245, blue=245, green=245))
         scroll_vbox = wx.BoxSizer(wx.VERTICAL)
@@ -42,23 +49,27 @@ class SelectGUI(wx.Dialog):
         # Now that the scroll panel has been created, we can create our list of checkbox items
         self.receipients_checkbox = self.create_checkbox_list(self.recipients_list, checkbox_panel)
 
+        # Add the first element, which contains the Select All checkbox, followed by a static line
         scroll_vbox.Add(self.receipients_checkbox[0], flag=wx.TOP | wx.LEFT, border=5)
         scroll_vbox.Add(wx.StaticLine(checkbox_panel, -1, size=(365, -1)), 0, wx.TOP, 2)
 
+        # For each checkbox item, add it to the vertical box sizer
         for cb in self.receipients_checkbox[1:len(self.receipients_checkbox)]:
             scroll_vbox.Add(cb, flag=wx.TOP | wx.LEFT, border=5)
 
+        # Set the sizer for the checkbox_panel
         checkbox_panel.SetSizer(scroll_vbox)
         # Call this after adding all of the objects
+        # Setup the scrolling for the sizer
         checkbox_panel.SetupScrolling()
 
         # Create panel to hold button that sends message or cancels
         buttons_panel = wx.Panel(self, style=wx.SIMPLE_BORDER, size=(400, 37), pos=(0, self.ui_size[1]-75))
         buttons_panel.SetBackgroundColour(wx.Colour(red=255, blue=255, green=255))
-
+        # Create horizontal box sizer for the buttons panel
         buttons_hbox = wx.BoxSizer(wx.HORIZONTAL)
-
-        info_label = wx.StaticText(buttons_panel, label='Select all recipients to receive message', pos=(0, 7))
+        # Create info label and buttons and add them to the screen
+        info_label = wx.StaticText(buttons_panel, label=' Select all recipients to receive message', pos=(0, 7))
         info_label.SetFont(font)
         buttons_hbox.Add(info_label)
         accept_button = wx.Button(buttons_panel, label='Accept', size=(50, 30), pos=(275, 2))
@@ -66,19 +77,21 @@ class SelectGUI(wx.Dialog):
         cancel_button = wx.Button(buttons_panel, label='Cancel', size=(50, 30), pos=(330, 2))
         buttons_hbox.Add(cancel_button, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_RIGHT, border=0)
 
+        # Set the sizer for the buttons panel
         buttons_panel.SetSizer(buttons_hbox)
 
-        # Bind buttons to event handler
+        # Bind buttons to event handlers
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
         accept_button.Bind(wx.EVT_BUTTON, self.on_accept)
 
+    # Creates and returns a list of checkbox items with a label determined by the info within the recipients_list
     def create_checkbox_list(self, recipients_list, parent):
         temp_list = []
         all_cb = wx.CheckBox(parent, label="Select All")
         all_cb.Bind(wx.EVT_CHECKBOX, self.on_all_check)
         temp_list.append(all_cb)
         for member in recipients_list:
-            cb = wx.CheckBox(parent, label=member.first_name + " " + member.last_name)
+            cb = wx.CheckBox(parent, label=f'{member.bond} : {member.first_name} {member.last_name}')
             cb.Bind(wx.EVT_CHECKBOX, self.on_cb_check)
             temp_list.append(cb)
         return temp_list
@@ -243,7 +256,7 @@ class PrimaryGUI(wx.Frame):
         # Make the screen visible to the user
         self.Show()
 
-    #still need to store the most recent receptiants file here
+    # still need to store the most recent receptiants file here
     def on_close(self, event):
         self.Destroy()
 
@@ -322,9 +335,9 @@ class PrimaryGUI(wx.Frame):
         if (sheet.cell(row=1, column=1).value is None or "bond" not in sheet.cell(row=1, column=1).value.lower() or
             sheet.cell(row=1, column=2).value is None or "first" not in sheet.cell(row=1, column=2).value.lower() or
             sheet.cell(row=1, column=3).value is None or "last" not in sheet.cell(row=1, column=3).value.lower() or
-            sheet.cell(row=1, column=4).value is None or "phone" not in sheet.cell(row=1, column=4).value.lower()):
+            sheet.cell(row=1, column=4).value is None or "phone" not in sheet.cell(row=1, column=4).value.lower()
+            ):
             return None
-
 
         for i in range(2, sheet.max_row + 1):
             recipients_list.append(Recipient(bond=sheet.cell(row=i, column=1).value,
@@ -346,12 +359,20 @@ class PrimaryGUI(wx.Frame):
             wx.MessageBox('No file selected!', 'Error', wx.OK | wx.ICON_ERROR)
             return
 
+        # Throw error if no recipients were loaded from file
         try:
             recipients_list = self.load_recipients()
             if recipients_list is None:
                 raise FileNotFoundError()
         except FileNotFoundError:
             wx.MessageBox('Error loading file!', 'Error', wx.OK | wx.ICON_ERROR)
+            return
+
+        # Check to make sure an internet connection is present
+        try:
+            urlopen("http://www.google.com/", timeout=1)
+        except urllib.error.URLError:
+            wx.MessageBox('Error: internet connection required', 'Error', wx.OK | wx.ICON_ERROR)
             return
 
         select_ui = SelectGUI(self, "Select Recipients", recipients_list, self.sid_value, self.auth_token_value, self.phonenumber_value)
@@ -361,6 +382,7 @@ class PrimaryGUI(wx.Frame):
         checkbox_items = select_ui.receipients_checkbox
         select_ui.Destroy()
 
+        # Final check to ensure user would like to send message
         response = wx.MessageBox('Are you sure you would like to send this message?', 'Send Message...',
                                  wx.YES_NO | wx.ICON_QUESTION)
         if response is not 2:
