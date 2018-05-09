@@ -1,4 +1,6 @@
 import wx
+import wx.lib
+import wx.lib.scrolledpanel as scrolled
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import os
@@ -8,9 +10,107 @@ from twilio.rest import Client
 from openpyxl import load_workbook
 
 
+class SelectGUI(wx.Dialog):
+    def __init__(self, parent, title, recipients_list, sid, authtoken, phonenumber):
+
+        list_size = len(recipients_list)
+        self.ui_size = (400, list_size*25 + 100)
+        if self.ui_size[1] > 260:
+            self.ui_size = (400, 260)
+
+        super(SelectGUI, self).__init__(parent, title=title, size=self.ui_size)
+        self.Center()
+
+        self.recipients_list = recipients_list
+        self.sid = sid
+        self.authtoken = authtoken
+        self.phonenumber = phonenumber
+        self.receipients_checkbox = []
+
+        self.init_ui()
+
+    def init_ui(self):
+        # Set font for the GUI Dialog
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        font.SetPointSize(10)
+
+        #Scroll Panel Containing All possible recipients
+        checkbox_panel = scrolled.ScrolledPanel(self, -1, size=(self.ui_size[0]-15, self.ui_size[1]-75), pos=(0, 0), style=wx.SIMPLE_BORDER)
+        checkbox_panel.SetBackgroundColour(wx.Colour(red=245, blue=245, green=245))
+        scroll_vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Now that the scroll panel has been created, we can create our list of checkbox items
+        self.receipients_checkbox = self.create_checkbox_list(self.recipients_list, checkbox_panel)
+
+        scroll_vbox.Add(self.receipients_checkbox[0], flag=wx.TOP | wx.LEFT, border=5)
+        scroll_vbox.Add(wx.StaticLine(checkbox_panel, -1, size=(365, -1)), 0, wx.TOP, 2)
+
+        for cb in self.receipients_checkbox[1:len(self.receipients_checkbox)]:
+            scroll_vbox.Add(cb, flag=wx.TOP | wx.LEFT, border=5)
+
+        checkbox_panel.SetSizer(scroll_vbox)
+        # Call this after adding all of the objects
+        checkbox_panel.SetupScrolling()
+
+        # Create panel to hold button that sends message or cancels
+        buttons_panel = wx.Panel(self, style=wx.SIMPLE_BORDER, size=(400, 37), pos=(0, self.ui_size[1]-75))
+        buttons_panel.SetBackgroundColour(wx.Colour(red=255, blue=255, green=255))
+
+        buttons_hbox = wx.BoxSizer(wx.HORIZONTAL)
+
+        info_label = wx.StaticText(buttons_panel, label='Select all recipients to receive message', pos=(0, 7))
+        info_label.SetFont(font)
+        buttons_hbox.Add(info_label)
+        accept_button = wx.Button(buttons_panel, label='Accept', size=(50, 30), pos=(275, 2))
+        buttons_hbox.Add(accept_button, flag=wx.RIGHT, border=0)
+        cancel_button = wx.Button(buttons_panel, label='Cancel', size=(50, 30), pos=(330, 2))
+        buttons_hbox.Add(cancel_button, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_RIGHT, border=0)
+
+        buttons_panel.SetSizer(buttons_hbox)
+
+        # Bind buttons to event handler
+        cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
+        accept_button.Bind(wx.EVT_BUTTON, self.on_accept)
+
+    def create_checkbox_list(self, recipients_list, parent):
+        temp_list = []
+        all_cb = wx.CheckBox(parent, label="Select All")
+        all_cb.Bind(wx.EVT_CHECKBOX, self.on_all_check)
+        temp_list.append(all_cb)
+        for member in recipients_list:
+            cb = wx.CheckBox(parent, label=member.first_name + " " + member.last_name)
+            cb.Bind(wx.EVT_CHECKBOX, self.on_cb_check)
+            temp_list.append(cb)
+        return temp_list
+
+    # Select all of the options if the Select All Checkbox is checked, remove if unchecked
+    def on_all_check(self, event):
+        all_cb = event.GetEventObject()
+        is_checked = all_cb.GetValue()
+        if is_checked:
+            for cb in self.receipients_checkbox:
+                cb.SetValue(1)
+        else:
+            for cb in self.receipients_checkbox:
+                cb.SetValue(0)
+
+    # If a box is unchecked and the Select All Checkbox is checked, remove the select all check
+    def on_cb_check(self, event):
+        cb = event.GetEventObject()
+        is_checked = cb.GetValue()
+        if not is_checked:
+            self.receipients_checkbox[0].SetValue(0)
+
+    def on_cancel(self, event):
+        self.EndModal(0)
+
+    def on_accept(self, event):
+        self.EndModal(1)
+
+
 class ConfigGUI(wx.Dialog):
     def __init__(self, parent, title, config_data_json, config_file):
-        super(ConfigGUI, self).__init__(None, title=title, size=(400, 185))
+        super(ConfigGUI, self).__init__(parent, title=title, size=(400, 185))
 
         self.config_file = config_file
         self.config_data_json = config_data_json
@@ -114,7 +214,7 @@ class ConfigGUI(wx.Dialog):
 
 class PrimaryGUI(wx.Frame):
     def __init__(self, parent, title, sid, authtoken, phonenumber, default_recipient_file, config_data_json, config_file):
-        super(PrimaryGUI, self).__init__(parent, title=title, size=(650, 400))
+        super(PrimaryGUI, self).__init__(parent, title=title, size=(700, 400))
 
         # Initialize dynamic variables
 
@@ -138,7 +238,7 @@ class PrimaryGUI(wx.Frame):
         self.Centre()
 
         # Set the minimum screen size
-        self.SetMinSize(size=(610, 400))
+        self.SetMinSize(size=(650, 400))
 
         # Make the screen visible to the user
         self.Show()
@@ -187,7 +287,7 @@ class PrimaryGUI(wx.Frame):
         recipients_stext = wx.StaticText(panel, label='Recipients File:')
         recipients_stext.SetFont(font)
         buttons_hbox.Add(recipients_stext, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
-        self.recipients_tc = wx.TextCtrl(panel, size=(250, 22))
+        self.recipients_tc = wx.TextCtrl(panel, size=(300, 22))
         self.recipients_tc.SetValue(self.recipients_file_location)
         buttons_hbox.Add(self.recipients_tc, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, border=5)
         select_file_button = wx.Button(panel, label='Select File', size=(70, 30))
@@ -210,7 +310,7 @@ class PrimaryGUI(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_tags, id=tags_button.GetId())
 
         # This event is called any time a menu is about to be opened
-        # This should be changed to work only on the configuration menu if more menus are added
+        # This should be changed to work only on the configuration menu if more menus are added in future versions
         self.Bind(wx.EVT_MENU_OPEN, self.on_configuration)
 
     # Load all of the recipients from the selected excel spreadsheet
@@ -219,7 +319,7 @@ class PrimaryGUI(wx.Frame):
         sheet = wb.worksheets[0]
         recipients_list = []
 
-        if( sheet.cell(row=1, column=1).value is None or "bond" not in sheet.cell(row=1, column=1).value.lower() or
+        if (sheet.cell(row=1, column=1).value is None or "bond" not in sheet.cell(row=1, column=1).value.lower() or
             sheet.cell(row=1, column=2).value is None or "first" not in sheet.cell(row=1, column=2).value.lower() or
             sheet.cell(row=1, column=3).value is None or "last" not in sheet.cell(row=1, column=3).value.lower() or
             sheet.cell(row=1, column=4).value is None or "phone" not in sheet.cell(row=1, column=4).value.lower()):
@@ -237,9 +337,6 @@ class PrimaryGUI(wx.Frame):
 
     # Here we will put the code for when the message is going to be sent
     def on_send_message(self, event):
-        response = wx.MessageBox('Are you sure you would like to send this message?', 'Send Message...', wx.YES_NO | wx.ICON_QUESTION)
-        if response is not 2:
-            return
         msg = self.message_textctrl.GetValue()
         if msg is "":
             wx.MessageBox('Cannot send empty message!', 'Error', wx.OK | wx.ICON_ERROR)
@@ -251,18 +348,32 @@ class PrimaryGUI(wx.Frame):
 
         try:
             recipients_list = self.load_recipients()
-            if recipients_list == None:
+            if recipients_list is None:
                 raise FileNotFoundError()
         except FileNotFoundError:
             wx.MessageBox('Error loading file!', 'Error', wx.OK | wx.ICON_ERROR)
             return
 
+        select_ui = SelectGUI(self, "Select Recipients", recipients_list, self.sid_value, self.auth_token_value, self.phonenumber_value)
+        return_msg = select_ui.ShowModal()
+        if return_msg is 0:
+            return
+        checkbox_items = select_ui.receipients_checkbox
+        select_ui.Destroy()
+
+        response = wx.MessageBox('Are you sure you would like to send this message?', 'Send Message...',
+                                 wx.YES_NO | wx.ICON_QUESTION)
+        if response is not 2:
+            return
+
         # This error handling needs some work
         try:
             twilioCli = Client(self.sid_value, self.auth_token_value)
-            for recipient in recipients_list:
-                format_msg = self.tag_matching(msg, recipient)
-                twilioCli.messages.create(body=format_msg, from_=self.phonenumber_value, to=recipient.phonenumber)
+            for i in range(1, len(recipients_list)+1):
+                if checkbox_items[i].GetValue():
+                    format_msg = self.tag_matching(msg, recipients_list[i-1])
+                    twilioCli.messages.create(body=format_msg, from_=self.phonenumber_value, to=recipients_list[i-1].phonenumber)
+                    #print(recipients_list[i-1].phonenumber)
         # This is too broad, but I'm not sure how to handle twilio exceptions right now
         except:
             wx.MessageBox('Error: Check Twilio configuration!', 'Error', wx.OK | wx.ICON_ERROR)
@@ -281,9 +392,9 @@ class PrimaryGUI(wx.Frame):
         return pattern.sub(lambda m: rep[re.escape(m.group(0))], msg)
 
     def format_phone_number(self, number):
-        number = number.replace("(", "")
-        number = number.replace(")", "")
-        number = number.replace("-", "")
+        number = number.replace("(", '')
+        number = number.replace(")", '')
+        number = number.replace("-", '')
         number = "+1" + number
         return number
 
@@ -338,3 +449,4 @@ class Recipient():
         self.first_name = first_name
         self.last_name = last_name
         self.phonenumber = phonenumber
+        self.checked = False

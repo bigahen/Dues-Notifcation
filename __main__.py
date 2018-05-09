@@ -16,7 +16,6 @@ def main():
         config_file.close()
         config_file = open("config.json", 'r+')
 
-
     #Translate json file to dictionary and open gui app. Pass in config data
     try:
         config_data_json = json.loads(config_file.read())
